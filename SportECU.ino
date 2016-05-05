@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include "FrskySport.h"
+#include "FrskySP.h"
 
 uint8_t raw_buffer[32*2];
 uint8_t* read_buffer = &raw_buffer[0];
@@ -58,9 +58,6 @@ void dispSTM(uint8_t data, bool rs)
 // - Display: HD44780 commands
 void onReceiveEvent(int bytes)
 {
-  i2c_busy = true;
-  disableSportSensor();
-
   // Ignore everything apart from
   // HD44780 4-bit commands (2 in a row)
   // bit-banged over PCF8574
@@ -105,9 +102,6 @@ volatile uint8_t keys_timer = 0;
 // - Display: not used
 void onRequestEvent()
 {
-  i2c_busy = true;
-  disableSportSensor();
-
   // - simulate key presses
   //   to cycle through status screens.
   Wire.write(keys);
@@ -122,10 +116,6 @@ void onRequestEvent()
 
 void setup()
 {
-  setSportSensorId(0x1B);
-  setSportSensorValues(4);
-  initSportUart();
-  
   Wire.begin(0x38);
   // Ignore the last address bit
   // to reply to 0x38 (display) & 0x39 (keypad)
@@ -134,32 +124,30 @@ void setup()
   Wire.onReceive(onReceiveEvent);
   Wire.onRequest(onRequestEvent);
 
-  // Debug
-  Serial.begin(115200);
-  Serial.println("*** SportECU ***");
+  FrskySP.begin();
 }
 
-const char _sc_unknown[] PROGMEM = { "Unknown" };
-const char _sc_temp[] PROGMEM = { "Temp" };
-const char _sc_fuel[] PROGMEM = { "Fuel" };
-const char _sc_battery[] PROGMEM = { "Battery" };
-const char _sc_pump_v[] PROGMEM = { "Pump Voltage" };
-const char _sc_error_st[] PROGMEM = { "Error Status" };
+/* const char _sc_unknown[] PROGMEM = { "Unknown" }; */
+/* const char _sc_temp[] PROGMEM = { "Temp" }; */
+/* const char _sc_fuel[] PROGMEM = { "Fuel" }; */
+/* const char _sc_battery[] PROGMEM = { "Battery" }; */
+/* const char _sc_pump_v[] PROGMEM = { "Pump Voltage" }; */
+/* const char _sc_error_st[] PROGMEM = { "Error Status" }; */
 
-const char* const screen_name_lookup[] PROGMEM = {
-  _sc_unknown, _sc_temp, _sc_fuel,
-  _sc_battery, _sc_pump_v, _sc_error_st
-};
+/* const char* const screen_name_lookup[] PROGMEM = { */
+/*   _sc_unknown, _sc_temp, _sc_fuel, */
+/*   _sc_battery, _sc_pump_v, _sc_error_st */
+/* }; */
 
-void print_screen_type(uint8_t type)
-{
-  char buffer[16];
+/* void print_screen_type(uint8_t type) */
+/* { */
+/*   char buffer[16]; */
 
-  const char* str_addr = (char*)pgm_read_word(&(screen_name_lookup[type]));
-  strcpy_P(buffer, str_addr);
+/*   const char* str_addr = (char*)pgm_read_word(&(screen_name_lookup[type])); */
+/*   strcpy_P(buffer, str_addr); */
 
-  Serial.print(buffer);
-}
+/*   Serial.print(buffer); */
+/* } */
 
 // return true if error while parsing
 void parse_float(const char* s, const char* end, float& value)
