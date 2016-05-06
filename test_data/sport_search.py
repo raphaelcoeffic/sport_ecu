@@ -13,6 +13,7 @@ class SPORT_CSV_Processor:
     
     last_time = -0.0051
     acc_data  = None
+    byte_stuff = False
 
     def receivedPkt(self):
         if self.acc_data[0] != SENSOR_ID:
@@ -41,8 +42,15 @@ class SPORT_CSV_Processor:
             self.last_time = pk_time
             self.acc_data = bytearray()
             return
-        
-        self.acc_data.append(pk_data)
+
+        if pk_data == 0x7D:
+            self.byte_stuff = True
+        else:
+            if self.byte_stuff:
+                self.byte_stuff = False
+                pk_data ^= 0x20
+            if self.acc_data is not None:
+                self.acc_data.append(pk_data)
         return
     
     def processFile(self,f):
