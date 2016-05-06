@@ -24,18 +24,19 @@ class SPORT_CSV_Processor:
 
         raw_data = self.acc_data[0:9]
         (sensor_id,tag,value_id,value,crc) = struct.unpack('<BBHIB',raw_data)
-        print '[id=0x%X; value=%u]' % (value_id,value)
+        print '%f\t[id=0x%X; value=%u]' % (self.last_time,value_id,value)
 
     def processRecord(self,fields):
 
         if (fields is None):
             self.receivedPkt()
+            return
 
         pk_time = float(fields[FIELD_TIME])
         pk_data = (int(fields[FIELD_DATA],16))
 
         if (pk_time - self.last_time > 0.005) and (pk_data == START_BYTE):
-            if (not (self.acc_data is None)):
+            if (self.acc_data is not None):
                 self.receivedPkt()
             self.last_time = pk_time
             self.acc_data = bytearray()
