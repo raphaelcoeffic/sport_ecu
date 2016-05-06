@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <SoftwareSerial.h>
 #include "FrskySP.h"
 
 uint8_t raw_buffer[32*2];
@@ -10,6 +11,10 @@ uint8_t write_ptr=0;
 volatile uint8_t reading_buffer = false;
 volatile uint8_t buffer_swapped = false;
 volatile uint8_t i2c_busy = false;
+
+#ifdef _DEBUG
+SoftwareSerial dbgSerial = SoftwareSerial(3,4); // Rx on pin 3 not connected
+#endif
 
 void swap_buffers()
 {
@@ -125,29 +130,34 @@ void setup()
   Wire.onRequest(onRequestEvent);
 
   FrskySP.begin();
+#ifdef _DEBUG
+  dbgSerial.begin(19200);
+#endif
 }
 
-/* const char _sc_unknown[] PROGMEM = { "Unknown" }; */
-/* const char _sc_temp[] PROGMEM = { "Temp" }; */
-/* const char _sc_fuel[] PROGMEM = { "Fuel" }; */
-/* const char _sc_battery[] PROGMEM = { "Battery" }; */
-/* const char _sc_pump_v[] PROGMEM = { "Pump Voltage" }; */
-/* const char _sc_error_st[] PROGMEM = { "Error Status" }; */
+const char _sc_unknown[] PROGMEM = { "Unknown" };
+const char _sc_temp[] PROGMEM = { "Temp" };
+const char _sc_fuel[] PROGMEM = { "Fuel" };
+const char _sc_battery[] PROGMEM = { "Battery" };
+const char _sc_pump_v[] PROGMEM = { "Pump Voltage" };
+const char _sc_error_st[] PROGMEM = { "Error Status" };
 
-/* const char* const screen_name_lookup[] PROGMEM = { */
-/*   _sc_unknown, _sc_temp, _sc_fuel, */
-/*   _sc_battery, _sc_pump_v, _sc_error_st */
-/* }; */
+const char* const screen_name_lookup[] PROGMEM = {
+  _sc_unknown, _sc_temp, _sc_fuel,
+  _sc_battery, _sc_pump_v, _sc_error_st
+};
 
-/* void print_screen_type(uint8_t type) */
-/* { */
-/*   char buffer[16]; */
+void print_screen_type(uint8_t type)
+{
+  char buffer[16];
 
-/*   const char* str_addr = (char*)pgm_read_word(&(screen_name_lookup[type])); */
-/*   strcpy_P(buffer, str_addr); */
+  const char* str_addr = (char*)pgm_read_word(&(screen_name_lookup[type]));
+  strcpy_P(buffer, str_addr);
 
-/*   Serial.print(buffer); */
-/* } */
+#ifdef _DEBUG
+  dbgSerial.print(buffer);
+#endif
+}
 
 // return true if error while parsing
 void parse_float(const char* s, const char* end, float& value)
@@ -175,20 +185,41 @@ void parse_float(const char* s, const char* end, float& value)
 #define A3_FIRST_ID               0x0900
 //#define FUEL_QTY_FIRST_ID         0x0A10
 
+#define SPORT_MAX_ID 4
+
+struct SportData {
+  uint16_t id;
+  uint32_t val;
+  bool updated;
+};
+
+SportData sportDataTable[SPORT_MAX_ID];
+
+void setSportNewData(uint8_t idx, uint16_t id, uint32_t val)
+{
+  sportDataTable[idx].id  = id;
+  sportDataTable[idx].val = val;
+  sportDataTable[idx].updated = true;
+}
+
 void set_temp(float temp)
 {
   uint32_t t = (uint32_t)temp;
   setSportNewData(0,T1_FIRST_ID,t);
-  Serial.print("Temp=");
-  Serial.println(temp);
+#ifdef _DEBUG
+  dbgSerial.print("Temp=");
+  dbgSerial.println(temp);
+#endif
 }
 
 void set_rpm(float rpm)
 {
   uint32_t r = (uint32_t)rpm;
   setSportNewData(1,RPM_FIRST_ID,r);
-  Serial.print("RPM=");
-  Serial.println(rpm);
+#ifdef _DEBUG
+  dbgSerial.print("RPM=");
+  dbgSerial.println(rpm);
+#endif
 }
 
 /* void set_fuel_used(float fuel_ml) */
@@ -203,16 +234,20 @@ void set_fuel_left(float fuel_ml)
 {
   uint32_t f = (uint32_t)fuel_ml;
   setSportNewData(2,FUEL_FIRST_ID,f);
-  Serial.print("Fuel left=");
-  Serial.println(fuel_ml);
+#ifdef _DEBUG
+  dbgSerial.print("Fuel left=");
+  dbgSerial.println(fuel_ml);
+#endif
 }
 
 void set_battery(float vbat)
 {
   uint32_t v = (uint32_t)(vbat * 100.0);
   setSportNewData(3,A3_FIRST_ID,v);
-  Serial.print("VBat=");
-  Serial.println(vbat);
+#ifdef _DEBUG
+  dbgSerial.print("VBat=");
+  dbgSerial.println(vbat);
+#endif
 }
 
 void loop()
@@ -221,17 +256,7 @@ void loop()
   static uint32_t last_ts=0;
   static uint8_t  last_screen_type = 0;
   static float    parsed_value = 0.0;
-  static uint32_t  i2c_ts = 0;
 
-  if(i2c_busy) {
-    i2c_busy = false;
-    i2c_ts = micros();
-  }
-  else {
-    if(micros() - i2c_ts > 1500)
-      enableSportSensor();
-  }
-  
   if(buffer_swapped) {
 
     reading_buffer = true;
@@ -287,12 +312,16 @@ void loop()
             read_buffer[3] == '-') {
       // Min-/Max-Pump voltage
       screen_type = 4;
-      Serial.println("V-Pump");
+#ifdef _DEBUG
+      dbgSerial.println("V-Pump");
+#endif
     }
     else {
       // Error Status
       screen_type = 5;
-      Serial.println("Error Status");
+#ifdef _DEBUG
+      dbgSerial.println("Error Status");
+#endif
     }
     reading_buffer = false;
 
@@ -310,6 +339,28 @@ void loop()
       
       keys_timer = KEYS_TIMER;
       interrupts();
+    }
+  }
+
+  // Poll S.PORT data buffer
+  while(Serial.available()) {
+    if(Serial.read() == 0x7E) {
+      
+      while (!Serial.available());
+      if(Serial.read() == 0x1B) {
+        
+        static uint8_t sport_data_idx = 0;
+
+        if(!sportDataTable[sport_data_idx].updated) {
+          sportDataTable[sport_data_idx].id  = 0;
+          sportDataTable[sport_data_idx].val = 0;
+        }
+
+        FrskySP.sendData(sportDataTable[sport_data_idx].id,
+                         sportDataTable[sport_data_idx].val);
+
+        sport_data_idx = (sport_data_idx + 1) % SPORT_MAX_ID;
+      }
     }
   }
 
