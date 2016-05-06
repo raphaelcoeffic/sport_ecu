@@ -2,134 +2,17 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
 #include "FrskySP.h"
-
-uint8_t raw_buffer[32*2];
-uint8_t* read_buffer = &raw_buffer[0];
-uint8_t* write_buffer = &raw_buffer[32];
-uint8_t write_ptr=0;
-
-volatile uint8_t reading_buffer = false;
-volatile uint8_t buffer_swapped = false;
-volatile uint8_t i2c_busy = false;
+#include "TermSim.h"
 
 #ifdef _DEBUG
 SoftwareSerial dbgSerial = SoftwareSerial(3,4); // Rx on pin 3 not connected
 #endif
 
-void swap_buffers()
-{
-  uint8_t* tmp = read_buffer;
-  read_buffer = write_buffer;
-  write_buffer = tmp;
-  buffer_swapped = true;
-}
-
-// Display state machine
-// -> simulate the HD44780 in 4-bit mode
-void dispSTM(uint8_t data, bool rs)
-{
-  static bool cg_ram_set = false;
-
-  if(rs) {
-    if(cg_ram_set) {
-      cg_ram_set = false;
-      return;
-    }
-
-    if(write_ptr < 32) {
-      write_buffer[write_ptr] = data;
-      write_ptr++;
-    }
-  }
-  else {
-    if(data & 0x80) {
-      data &= 0x7F;
-      if(data >= 0x40)
-        write_ptr = data - 0x40 + 16;
-      else {
-        write_ptr = data;
-        if(data == 0 && !reading_buffer)
-          swap_buffers();
-      }
-    }
-    else if(data & 0x40) {
-      cg_ram_set = true;
-    }
-  }
-}
-
-// Triggered on I2C Write requests
-// - Keypad: 1 byte (0xFF) -> ignore
-// - Display: HD44780 commands
-void onReceiveEvent(int bytes)
-{
-  // Ignore everything apart from
-  // HD44780 4-bit commands (2 in a row)
-  // bit-banged over PCF8574
-  if(bytes != 6) {
-    while(Wire.available())
-      Wire.read();
-    return;
-  }
-
-  // We only need the 3rd & 6th byte,
-  // the others can be just wasted.
-  Wire.read();
-  Wire.read();
-  
-  uint8_t cmd = Wire.read();
-  cmd &= 0xF0;
-  
-  Wire.read();
-  Wire.read();
-
-  uint8_t tmp = Wire.read();
-  bool rs = tmp & 1;
-  cmd |= tmp >> 4;
-
-  dispSTM(cmd,rs);
-}
-
-#define DEFAULT_KEYS 0x5F
-
-/*
-  Leave key pressed for some cycles
-  & wait for a few cycles with key released
-*/
-#define KEYS_TIMER 8
-#define KEYS_RELEASED_CYCLES 2
-
-volatile uint8_t keys = DEFAULT_KEYS;
-volatile uint8_t keys_timer = 0;
-
-// Triggered on I2C Read requests
-// - Keypad: key state (active low)
-// - Display: not used
-void onRequestEvent()
-{
-  // - simulate key presses
-  //   to cycle through status screens.
-  Wire.write(keys);
-
-  // leave key pressed until KEYS_RELEASED_CYCLES
-  if(keys_timer > 0) {
-    --keys_timer;
-    if(keys_timer == KEYS_RELEASED_CYCLES)
-      keys = DEFAULT_KEYS;
-  }
-}
-
 void setup()
 {
-  Wire.begin(0x38);
-  // Ignore the last address bit
-  // to reply to 0x38 (display) & 0x39 (keypad)
-  TWAMR = 1 << 1;
+  TermSim.begin();
+  FrskySP.begin(0x1B,4);
 
-  Wire.onReceive(onReceiveEvent);
-  Wire.onRequest(onRequestEvent);
-
-  FrskySP.begin();
 #ifdef _DEBUG
   dbgSerial.begin(19200);
 #endif
@@ -183,29 +66,12 @@ void parse_float(const char* s, const char* end, float& value)
 #define RPM_FIRST_ID              0x0500
 #define FUEL_FIRST_ID             0x0600
 #define A3_FIRST_ID               0x0900
-//#define FUEL_QTY_FIRST_ID         0x0A10
-
-#define SPORT_MAX_ID 4
-
-struct SportData {
-  uint16_t id;
-  uint32_t val;
-  bool updated;
-};
-
-SportData sportDataTable[SPORT_MAX_ID];
-
-void setSportNewData(uint8_t idx, uint16_t id, uint32_t val)
-{
-  sportDataTable[idx].id  = id;
-  sportDataTable[idx].val = val;
-  sportDataTable[idx].updated = true;
-}
+#define FUEL_QTY_FIRST_ID         0x0A10
 
 void set_temp(float temp)
 {
   uint32_t t = (uint32_t)temp;
-  setSportNewData(0,T1_FIRST_ID,t);
+  FrskySP.setSensorData(0,T1_FIRST_ID,t);
 #ifdef _DEBUG
   dbgSerial.print("Temp=");
   dbgSerial.println(temp);
@@ -215,25 +81,27 @@ void set_temp(float temp)
 void set_rpm(float rpm)
 {
   uint32_t r = (uint32_t)rpm;
-  setSportNewData(1,RPM_FIRST_ID,r);
+  FrskySP.setSensorData(1,RPM_FIRST_ID,r);
 #ifdef _DEBUG
   dbgSerial.print("RPM=");
   dbgSerial.println(rpm);
 #endif
 }
 
-/* void set_fuel_used(float fuel_ml) */
-/* { */
-/*   uint32_t f = (uint32_t)fuel_ml; */
-/*   setSportNewData(2,FUEL_FIRST_ID,f); */
-/*   Serial.print("Fuel used="); */
-/*   Serial.println(fuel_ml); */
-/* } */
+#if 0
+void set_fuel_used(float fuel_ml)
+{
+  uint32_t f = (uint32_t)fuel_ml;
+  FrskySP.setSensorData(2,FUEL_FIRST_ID,f);
+  Serial.print("Fuel used=");
+  Serial.println(fuel_ml);
+}
+#endif
 
 void set_fuel_left(float fuel_ml)
 {
-  uint32_t f = (uint32_t)fuel_ml;
-  setSportNewData(2,FUEL_FIRST_ID,f);
+  uint32_t f = (uint32_t)fuel_ml * 100;
+  FrskySP.setSensorData(2,FUEL_QTY_FIRST_ID,f);
 #ifdef _DEBUG
   dbgSerial.print("Fuel left=");
   dbgSerial.println(fuel_ml);
@@ -243,7 +111,7 @@ void set_fuel_left(float fuel_ml)
 void set_battery(float vbat)
 {
   uint32_t v = (uint32_t)(vbat * 100.0);
-  setSportNewData(3,A3_FIRST_ID,v);
+  FrskySP.setSensorData(3,A3_FIRST_ID,v);
 #ifdef _DEBUG
   dbgSerial.print("VBat=");
   dbgSerial.println(vbat);
@@ -253,18 +121,19 @@ void set_battery(float vbat)
 void loop()
 {
   static uint32_t last_key_press=0;
-  static uint32_t last_ts=0;
   static uint8_t  last_screen_type = 0;
   static float    parsed_value = 0.0;
 
-  if(buffer_swapped) {
+  FrskySP.poll();
 
-    reading_buffer = true;
-    buffer_swapped = false;
-    last_ts = millis();
+  if(TermSim.getBufferSwapped()) {
+
+    TermSim.startReading();
+    TermSim.resetBufferSwapped();
 
     // parse screen type
-    uint8_t screen_type=0;
+    uint8_t screen_type = 0;
+    uint8_t* read_buffer = TermSim.getReadBuffer();
 
     if(read_buffer[4] == 0x03) {
       // Temp screen found
@@ -323,69 +192,25 @@ void loop()
       dbgSerial.println("Error Status");
 #endif
     }
-    reading_buffer = false;
+    TermSim.stopReading();
 
-    if(!keys_timer) {
-
-      noInterrupts();
-      if(screen_type < 3) {
-        // press 'up'
-        keys &= ~(0x8);
-      }
-      else {
-        // press 'cancel'
-        keys &= ~(0x2);
-      }
-      
-      keys_timer = KEYS_TIMER;
-      interrupts();
-    }
   }
 
-  // Poll S.PORT data buffer
-  while(Serial.available()) {
-    if(Serial.read() == 0x7E) {
-      
-      while (!Serial.available());
-      if(Serial.read() == 0x1B) {
-        
-        static uint8_t sport_data_idx = 0;
+  if(!TermSim.keyPressed()) {
 
-        if(!sportDataTable[sport_data_idx].updated) {
-          sportDataTable[sport_data_idx].id  = 0;
-          sportDataTable[sport_data_idx].val = 0;
-        }
+    static unsigned long last_ts = 0;
+    unsigned long now_ts = millis();
 
-        FrskySP.sendData(sportDataTable[sport_data_idx].id,
-                         sportDataTable[sport_data_idx].val);
-
-        sport_data_idx = (sport_data_idx + 1) % SPORT_MAX_ID;
-      }
+    if(now_ts - last_ts > 800) {
+      last_ts = now_ts;
+      /* if(screen_type < 3) { */
+        // press 'down'
+      TermSim.pressKey(TermSim_class::DOWN_key);
+      /* } */
+      /* else { */
+      /*   // press 'cancel' */
+      /*   TermSim.pressKey(TermSim_class::CANCEL_key); */
+      /* } */
     }
   }
-
-#if 0
-  while(Serial.available()) {
-    switch(Serial.read()) {
-    case 'u':
-      noInterrupts();
-      keys &= ~(0x8);
-      keys_timer = KEYS_TIMER;
-      interrupts();
-      break;
-    case 'd':
-      noInterrupts();
-      keys &= ~(0x4);
-      keys_timer = KEYS_TIMER;
-      interrupts();
-      break;
-    case 'c':
-      noInterrupts();
-      keys &= ~(0x2);
-      keys_timer = KEYS_TIMER;
-      interrupts();
-      break;
-    }
-  }
-#endif
 }
