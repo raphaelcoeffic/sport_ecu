@@ -4,7 +4,6 @@
 
 #include "Arduino.h"
 #include "FrskySP.h"
-#include "SoftwareSerial.h"
 
 #define MAX_SENSORS                8
 #define SPORT_FRAME_BEGIN       0x7E
