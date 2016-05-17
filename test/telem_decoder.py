@@ -37,8 +37,7 @@ class SerialTelemetry_Processor:
             else:
                 
                 if byte_stuffing:
-                    chk_sum -= (b & 0x20)
-                    b |= 0x20
+                    b ^= 0x20
                     byte_stuffing = False
                 data.append(b)
 
@@ -49,8 +48,8 @@ class SerialTelemetry_Processor:
         #print ' '.join( (format(x, '002X') for x in data) ) + (' (%X)' % chk_sum)
 
         if chk_sum != 0x24:
-            print '## bad frame ##'
-            #return
+            #print '## bad frame ##'
+            return
 
         if len(fields) < 20:
             #print '## packtet too small ##'
@@ -64,6 +63,8 @@ class SerialTelemetry_Processor:
         fuel = data[15] | (data[16] << 8)
         status = data[19]
 
+
+        #print 'data[7]=%X;data[8]=%X;data[9]=%X' % (data[7],data[8],data[9])
         print 'th=%i; rpm=%i; egt=%i; vbat=%i; vpmp=%i; fuel=%i; status=%i; chk=%x' % (thro,rpm,egt,vbat,vpmp,fuel,status,chk_sum)
         return
     
