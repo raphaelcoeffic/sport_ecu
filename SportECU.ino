@@ -127,8 +127,7 @@ void loop()
     }
 
     if(byte_stuffing) {
-      chk_sum -= (data & ECU_STUFF_MASK);
-      data |= ECU_STUFF_MASK;
+      data ^= ECU_STUFF_MASK;
       byte_stuffing = false;
     }
     
