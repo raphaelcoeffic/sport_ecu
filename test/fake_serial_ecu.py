@@ -65,7 +65,7 @@ def main (argv):
     port.dtr = 1
 
     # wait for bootloader timeout
-    sleep(4.0)
+    sleep(1.0)
 
     print '+++'
     port.write('+++')
