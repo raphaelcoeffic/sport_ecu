@@ -41,7 +41,6 @@ union FrskySP_class::packet {
 struct FrskySP_SensorData {
   uint16_t id;
   uint32_t val;
-  bool updated;
 };
 
 static FrskySP_SensorData _sensorTable[MAX_SENSORS];
@@ -142,17 +141,12 @@ void FrskySP_class::poll ()
       if((sportSerial.read() == _sensorId) &&
          _sensorValues) {
 
-        if(!_sensorTable[_sensorTableIdx].updated) {
-          _sensorTable[_sensorTableIdx].id  = 0;
-          _sensorTable[_sensorTableIdx].val = 0;
-        }
 
         FrskySP.sendData(0x10,
                          _sensorTable[_sensorTableIdx].id,
                          _sensorTable[_sensorTableIdx].val);
 
         _sensorTableIdx = (_sensorTableIdx + 1) % _sensorValues;
-        _sensorTable[_sensorTableIdx].updated = false;
       }
     }
   }
@@ -167,7 +161,6 @@ void FrskySP_class::setSensorData(uint8_t idx, uint16_t id, uint32_t val)
 #ifdef USE_TEENSY
   _sensorTable[idx].id  = id;
   _sensorTable[idx].val = val;
-  _sensorTable[idx].updated = true;
 #else
   setSportNewData(idx,id,val);
 #endif
