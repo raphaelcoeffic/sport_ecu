@@ -104,6 +104,7 @@ Once everything is plugged and powered on, go to the telemetry configuration scr
 If you wish to install the LUA script, here is how it should look like on your SD card:
 
 | File          | SD card location                |
+| ------------- | ------------------------------- |
 | RxHornet.lua  | /SCRIPTS/TELEMETRY/RxHornet.lua |
 | *.bmp         | /SCRIPTS/BMP/                   |
 
