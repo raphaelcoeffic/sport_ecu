@@ -94,3 +94,22 @@ This project uses the wireless telemetry interface on the ECU.
 This means that it needs to be enabled first using a regular ECU terminal by setting the proper frequency.
 
 I recommend using the highest frequency you can select (10x per second) to get the best experience. However, anything will work just the same.
+
+### OpenTX configuration
+
+I assume here that you are using OpenTx >= 2.1.8. It will not work with version 2.0.x, as the LUA & telemetry interfaces have changed between versions.
+
+Once everything is plugged and powered on, go to the telemetry configuration screen and discover the new sensors.
+
+If you wish to install the LUA script, here is how it should look like on your SD card:
+
+| File          | SD card location                |
+| RxHornet.lua  | /SCRIPTS/TELEMETRY/RxHornet.lua |
+| *.bmp         | /SCRIPTS/BMP/                   |
+
+You should then be able to select the script on the model telemetry configuration screen.
+
+If you are not using the Frsky air speed sensor or prefer to use the GPS speed over ground, edit the LUA script and change this line:
+```
+   local speed  = "ASpd" -- change ASpd to whatever the name of the speed sensor is
+```
