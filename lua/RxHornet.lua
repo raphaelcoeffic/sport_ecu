@@ -20,8 +20,11 @@ local function draw_status(x,y,src)
       [10] = "COOL DOWN",
    }
 
+   local status = getValue(src)
+   local status_str = msg_table[status] or tostring(status)
+      
    lcd.drawText(x+30,y+2,"STATUS",0)
-   lcd.drawText(x+4,y+12,msg_table[getValue(src)],MIDSIZE)
+   lcd.drawText(x+4,y+12,status_str,MIDSIZE)
 end
 
 local function draw_rpm(x,y,src)
