@@ -84,7 +84,7 @@ Please connect the arduino as follows:
 If you are using a teensy, please refer to the [teensyduino page](https://www.pjrc.com/teensy/td_download.html) for more instructions on how to install everything.
 I'm currently using Arduino 1.6.7 to compile & flash both teensy & arduino software.
 
-If you are using an arduino board, you will need to install the FrskySport library into your custom library directory.
+If you are using an arduino board, you will need to install the [FrskySport](https://github.com/raphaelcoeffic/FrskySport) library into your custom library directory.
 
 Once everything is installed, just compile & flash!
 
